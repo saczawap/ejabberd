@@ -1059,6 +1059,10 @@ disco_identity(_Host, <<>>, _From) ->
 disco_identity(Host, Node, From) ->
     Action = fun (#pubsub_node{id = Idx, type = Type,
 			       options = Options, owners = Owners}) ->
+		     NodeType = case get_option(Options, node_type) of
+				    leaf -> <<"leaf">>;
+				    collection -> <<"collection">>
+				end,
 		     case get_allowed_items_call(Host, Idx, From, Type, Options, Owners) of
 		       {result, _} ->
 			   {result,
@@ -1070,7 +1074,7 @@ disco_identity(Host, Node, From) ->
 			     #xmlel{name = <<"identity">>,
 				    attrs =
 					[{<<"category">>, <<"pubsub">>},
-					 {<<"type">>, <<"leaf">>}
+					 {<<"type">>, NodeType}
 					 | case get_option(Options, title) of
 					     false -> [];
 					     [Title] -> [{<<"name">>, Title}]
@@ -1752,7 +1756,11 @@ node_disco_info(Host, Node, From, _Identity, _Features) ->
 %	{result, {_, Result}} -> {result, Result};
 %	Other -> Other
 %    end.
-    Action = fun (#pubsub_node{type = Type, id = NodeId}) ->
+    Action = fun (#pubsub_node{type = Type, id = NodeId, options = Options}) ->
+		     NodeType = case get_option(Options, node_type) of
+				    leaf -> <<"leaf">>;
+				    collection -> <<"collection">>
+				end,
 		     Types = case tree_call(Host, get_subnodes,
 						      [Host, Node, From])
 					   of
@@ -1769,15 +1777,16 @@ node_disco_info(Host, Node, From, _Identity, _Features) ->
 					       _ -> []
 					     end
 				       end,
-		    I = lists:map(fun (T) ->
+		    I = 
 						 #xmlel{name = <<"identity">>,
 							attrs =
 							    [{<<"category">>,
 							      <<"pubsub">>},
-							     {<<"type">>, T}],
-							children = []}
-					 end,
-					 Types),
+							     {<<"type">>, NodeType}],
+							children = []},
+		     
+			
+
 		     F = [#xmlel{name = <<"feature">>,
 				       attrs = [{<<"var">>, ?NS_PUBSUB}],
 				       children = []}
@@ -1791,7 +1800,7 @@ node_disco_info(Host, Node, From, _Identity, _Features) ->
 							   children = []}
 					    end,
 					    features(Type))],
-		     {result, I ++ F}
+		     {result, [I | F]}
 	     end,
     case transaction(Host, Node, Action, sync_dirty) of
       {result, {_, Result}} -> {result, Result};
